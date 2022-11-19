@@ -3,10 +3,12 @@ import os
 import sys
 from operator import itemgetter
 
+from scapy.layers.dns import DNSQR
 from scapy.utils import RawPcapReader, rdpcap
 from scapy.layers.l2 import Ether
-from scapy.layers.inet import IP, TCP
+from scapy.layers.inet import IP, TCP, ICMP, UDP
 from scapy.all import *
+
 
 pkts = PacketList()
 def process_pcap2(file_name):
@@ -82,6 +84,186 @@ def process_pcap(file_name):
     print('{} contains {} packets ({} interesting)'.
           format(file_name, count, interesting))
 
+def NULL_flood():
+    src_ip_list = []
+    pocet_syn = 0
+
+    for pkt in pkts:
+        flag1 = 1
+        flag_dst_zaznam = 1
+        if IP in pkt:
+            if TCP in pkt:
+                tcp_sport = pkt[TCP].sport
+                tcp_dport = pkt[TCP].dport
+                tcp_flag = pkt[TCP].flags
+                tcp_window = pkt[TCP].window
+                if tcp_flag == '':
+                    pocet_syn +=1
+                    ip_src = pkt[IP].src
+                    ip_dst = pkt[IP].dst
+
+                    #zisti, ci existuju uz nejake zachytene zdrojove IP, hladaj medzi nimi
+                    for zaznam in src_ip_list:
+
+                        #nasla sa zhoda
+                        if ip_src == zaznam["IP"]:
+                            flag1 = 0
+                            zaznam['pocet'] += 1
+
+                            #zaznamenaj dst_ip
+                            for zaznam_dst in zaznam['destination']:
+                                if(ip_dst == zaznam_dst['IP']):
+                                    flag_dst_zaznam = 0
+                                    zaznam_dst['pocet'] += 1
+                                    zaznam['destination'] = sorted(zaznam['destination'], reverse=True, key=lambda d: d['pocet'])
+
+                            #s takouto dst sa este nekomunikovalo
+                            if(flag_dst_zaznam):
+                                zaznam['destination'].append({'IP': ip_dst, 'pocet': 1})
+
+                    # IP sa vyskytuje 1-krat
+                    if (flag1):
+                        destination = [{'IP': ip_dst, 'pocet': 1}]
+                        zaznam = {'IP': ip_src, 'pocet': 1, 'destination': destination}
+                        src_ip_list.append(zaznam)
+
+                    src_ip_list = sorted(src_ip_list, reverse=True, key=lambda d: d['pocet'])
+
+
+    print('**************** Podozrenie na NULL TCP scan portov ****************')
+    print('Počet zachytených TCP_SYN paketov:{}'.format(pocet_syn))
+    print('\n')
+    print('Najaktívnejších 5 zdrojových IP a ich 5 najčastejších cieľov')
+    for i in range({True: len(src_ip_list), False: 5}[len(src_ip_list)<5]):
+        print('======================================')
+        print('{}. IP: {:20} {} krát'.format(i+1, src_ip_list[i]['IP'], src_ip_list[i]['pocet']))
+        print('--------------------------------------')
+        for j in range({True: len(src_ip_list[i]['destination']), False: 5}[len(src_ip_list[i]['destination'])<5]):
+            #print(src_ip_list[i]['destination'][j]['IP'])
+            print('Ciel: {:10} \t {} krát'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
+        print("\n")
+
+def DNS_ANY():
+    src_ip_list = []
+    pocet_dns = 0
+    kl = 1
+    for pkt in pkts:
+        flag1 = 1
+        flag_dst_zaznam = 1
+        if IP in pkt:
+            if UDP in pkt:
+                udp_dport = pkt[UDP].dport
+
+                if udp_dport == 53:
+                    pocet_dns +=1
+                    if DNSQR in pkt:
+                        dns_type = pkt[DNSQR].qtype
+                        ip_src = pkt[IP].src
+                        ip_dst = pkt[IP].dst
+
+                        if (dns_type == 255):
+                            #zisti, ci existuju uz nejake zachytene zdrojove IP, hladaj medzi nimi
+                            for zaznam in src_ip_list:
+    
+                                #nasla sa zhoda
+                                if ip_src == zaznam["IP"]:
+                                    flag1 = 0
+                                    zaznam['pocet'] += 1
+    
+                                    #zaznamenaj dst_ip
+                                    for zaznam_dst in zaznam['destination']:
+                                        if(ip_dst == zaznam_dst['IP']):
+                                            flag_dst_zaznam = 0
+                                            zaznam_dst['pocet'] += 1
+                                            zaznam['destination'] = sorted(zaznam['destination'], reverse=True, key=lambda d: d['pocet'])
+    
+                                    #s takouto dst sa este nekomunikovalo
+                                    if(flag_dst_zaznam):
+                                        zaznam['destination'].append({'IP': ip_dst, 'pocet': 1})
+    
+                            # IP sa vyskytuje 1-krat
+                            if (flag1):
+                                destination = [{'IP': ip_dst, 'pocet': 1}]
+                                zaznam = {'IP': ip_src, 'pocet': 1, 'destination': destination}
+                                src_ip_list.append(zaznam)
+    
+                        src_ip_list = sorted(src_ip_list, reverse=True, key=lambda d: d['pocet'])
+
+
+    print('**************** Podozrenie na NULL TCP scan portov ****************')
+    print('Počet zachytených TCP_SYN paketov:{}'.format(pocet_dns))
+    print('\n')
+    print('Najaktívnejších 5 zdrojových IP a ich 5 najčastejších cieľov')
+    for i in range({True: len(src_ip_list), False: 5}[len(src_ip_list)<5]):
+        print('======================================')
+        print('{}. IP: {:20} {} krát'.format(i+1, src_ip_list[i]['IP'], src_ip_list[i]['pocet']))
+        print('--------------------------------------')
+        for j in range({True: len(src_ip_list[i]['destination']), False: 5}[len(src_ip_list[i]['destination'])<5]):
+            #print(src_ip_list[i]['destination'][j]['IP'])
+            print('Ciel: {:10} \t {} krát'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
+        print("\n")
+
+
+
+#icmp.type==8 or icmp.type==0
+def ICMP_flood():
+    src_ip_list = []
+    pocet_icmp = 0
+
+    for pkt in pkts:
+        flag1 = 1
+        flag_dst_zaznam = 1
+        if IP in pkt:
+            if ICMP in pkt:
+                icmp_type = pkt[ICMP].type
+                if icmp_type == 8 or icmp_type == 0:
+                    pocet_icmp +=1
+                    ip_src = pkt[IP].src
+                    ip_dst = pkt[IP].dst
+
+                    #zisti, ci existuju uz nejake zachytene zdrojove IP, hladaj medzi nimi
+                    for zaznam in src_ip_list:
+
+                        #nasla sa zhoda
+                        if ip_src == zaznam["IP"]:
+                            flag1 = 0
+                            zaznam['pocet'] += 1
+
+                            #zaznamenaj dst_ip
+                            for zaznam_dst in zaznam['destination']:
+                                if(ip_dst == zaznam_dst['IP']):
+                                    flag_dst_zaznam = 0
+                                    zaznam_dst['pocet'] += 1
+                                    zaznam['destination'] = sorted(zaznam['destination'], reverse=True, key=lambda d: d['pocet'])
+
+                            #s takouto dst sa este nekomunikovalo
+                            if(flag_dst_zaznam):
+                                zaznam['destination'].append({'IP': ip_dst, 'pocet': 1})
+
+                    # IP sa vyskytuje 1-krat
+                    if (flag1):
+                        destination = [{'IP': ip_dst, 'pocet': 1}]
+                        zaznam = {'IP': ip_src, 'pocet': 1, 'destination': destination}
+                        src_ip_list.append(zaznam)
+
+                    src_ip_list = sorted(src_ip_list, reverse=True, key=lambda d: d['pocet'])
+
+
+    print('**************** Podozrenie na ICMP scan portov ****************')
+    print('Počet zachytených ICMP type 0/8 paketov:{}'.format(pocet_icmp))
+    print('\n')
+    print('Najaktívnejších 5 zdrojových IP a ich 5 najčastejších cieľov')
+
+    for i in range({True: len(src_ip_list), False: 5}[len(src_ip_list)<5]):
+        print('======================================')
+        print('{}. IP: {:20} {} krát'.format(i+1, src_ip_list[i]['IP'], src_ip_list[i]['pocet']))
+        print('--------------------------------------')
+
+        for j in range({True: len(src_ip_list[i]['destination']), False: 5}[len(src_ip_list[i]['destination'])<5]):
+            #print(src_ip_list[i]['destination'][j]['IP'])
+            print('Ciel: {:10} \t {} krát'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
+        print("\n")
+
 #tcp.flags.syn==1 and tcp.flags.ack==0 and tcp.window_size <= 1024
 def SYN_flood():
     src_ip_list = []
@@ -96,7 +278,7 @@ def SYN_flood():
                 tcp_dport = pkt[TCP].dport
                 tcp_flag = pkt[TCP].flags
                 tcp_window = pkt[TCP].window
-                if tcp_flag == 'S' and tcp_window <= 1024:
+                if tcp_flag == 'S':
                     pocet_syn +=1
                     ip_src = pkt[IP].src
                     ip_dst = pkt[IP].dst
@@ -181,7 +363,10 @@ if __name__ == '__main__':
 
     pkts = rdpcap(file_name)
     #print_summary()
-    SYN_flood()
+    #SYN_flood()
+    #ICMP_flood()
+    #NULL_flood()
+    DNS_ANY()
     # or it possible to filter with filter parameter...!
     #process_pcap(file_name)
     sys.exit(0)
