@@ -3,8 +3,8 @@ import os
 import sys
 from operator import itemgetter
 
+
 from scapy.layers.dns import DNSQR
-from scapy.utils import RawPcapReader, rdpcap
 from scapy.layers.l2 import Ether
 from scapy.layers.inet import IP, TCP, ICMP, UDP
 from scapy.all import *
@@ -204,6 +204,81 @@ def DNS_ANY():
         print("\n")
 
 
+def DNS_WEB():
+    query_name = []
+    pocet_dns = 0
+
+    for pkt in pkts:
+        flag1 = 1
+        flag2 = 1
+        flag_novy=1
+        if IP in pkt:
+            if UDP in pkt:
+                udp_dport = pkt[UDP].dport
+                if udp_dport == 53:
+                    if DNSQR in pkt:
+                        dns_type = pkt[DNSQR].qtype
+                        if (dns_type != 255):
+                            pocet_dns += 1
+                            dns_name = pkt[DNSQR].qname
+                            ip_src = pkt[IP].src
+                            ip_dst = pkt[IP].dst
+
+                            #existujuci DNS record
+                            for zaznam in query_name:
+                                if (zaznam['DNS']==dns_name):
+                                    flag_novy = 0
+                                #zdrojove IP
+                                    # dane DNS dopytovalo uz existujuca IP
+                                    for zdrojove_IP in zaznam['S_IP']:
+                                        if ip_src == zdrojove_IP['IP']:
+                                            flag1 = 0
+                                            zdrojove_IP['pocet'] += 1
+                                            zaznam['S_IP'] = sorted(zaznam['S_IP'], reverse=True,
+                                                                           key=lambda d: d['pocet'])
+                                            break
+
+                                    # IP sa vyskytuje 1-krat v danom DND dopyte
+                                    if (flag1):
+                                        zaznam['S_IP'].append({'IP': ip_src, 'pocet': 1})
+
+                                #cieloveIP
+                                    for cielove_IP in zaznam['D_IP']:
+                                        if ip_dst == cielove_IP['IP']:
+                                            flag2 = 0
+                                            cielove_IP['pocet'] += 1
+                                            zaznam['D_IP'] = sorted(zaznam['D_IP'], reverse=True,
+                                                                    key=lambda d: d['pocet'])
+                                            break
+
+                                    # IP sa vyskytuje 1-krat v danom DND dopyte
+                                    if (flag2):
+                                        zaznam['D_IP'].append({'IP': ip_dst, 'pocet': 1})
+
+                                    break
+
+                            #novy DNS record
+                            if (flag_novy):
+                                source_IP = [{'IP': ip_src, 'pocet': 1}]
+                                destination_IP = [{'IP': ip_dst, 'pocet': 1}]
+                                zaznam = {'DNS': dns_name, 'S_IP': source_IP, 'D_IP': destination_IP}
+                                query_name.append(zaznam)
+
+    print('**************** Podozrenie na DNS flood ****************')
+    print('Počet zachytených DNS paketov:{}'.format(pocet_dns))
+    print('\n')
+
+    for zaznam in query_name:
+        print('======================================')
+        print('Name: {}'.format(zaznam['DNS']))
+        print('---------------- 5 najčastejších ----------------')
+        for j in range({True: len(zaznam['S_IP']), False: 5}[len(zaznam['S_IP'])<5]):
+            print('Zdroj: {:10} \t {} krát'.format(zaznam['S_IP'][j]['IP'], zaznam['S_IP'][j]['pocet']))
+        print('---------------- 5 najčastejších ----------------')
+        for j in range({True: len(zaznam['D_IP']), False: 5}[len(zaznam['D_IP']) < 5]):
+            print('Ciel: {:10} \t {} krát'.format(zaznam['D_IP'][j]['IP'], zaznam['D_IP'][j]['pocet']))
+        print("\n")
+
 
 #icmp.type==8 or icmp.type==0
 def ICMP_flood():
@@ -323,6 +398,7 @@ def SYN_flood():
             #print(src_ip_list[i]['destination'][j]['IP'])
             print('Ciel: {:10} \t {} krát'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
         print("\n")
+
 def print_summary():
     counter = 0
     pocet=0
@@ -366,7 +442,8 @@ if __name__ == '__main__':
     #SYN_flood()
     #ICMP_flood()
     #NULL_flood()
-    DNS_ANY()
+    #DNS_ANY()
+    DNS_WEB()
     # or it possible to filter with filter parameter...!
     #process_pcap(file_name)
     sys.exit(0)
