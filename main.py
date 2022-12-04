@@ -1,8 +1,4 @@
 import argparse
-import os
-import sys
-from operator import itemgetter
-
 
 from scapy.layers.dns import DNSQR
 from scapy.layers.l2 import Ether
@@ -11,80 +7,8 @@ from scapy.all import *
 
 
 pkts = PacketList()
-def process_pcap2(file_name):
-    print('Opening {}...'.format(file_name))
 
-    count = 0
-    interesting_packet_count = 0
-    konkretne_ip = 0
-
-    for (pkt_data, pkt_metadata,) in RawPcapReader(file_name):
-        count += 1
-
-        ether_pkt = Ether(pkt_data)
-        """
-        if 'type' not in ether_pkt.fields:
-            # LLC frames will have 'len' instead of 'type'.
-            # We disregard those
-            continue
-
-        if ether_pkt.type != 0x0800:
-            # disregard non-IPv4 packets
-            continue
-
-        ip_pkt = IP(pkt_data)
-        if ip_pkt.proto != 6:
-            # Ignore non-TCP packet
-            continue
-        """
-
-        ip_pkt = pkt_data[IP]
-        if ip_pkt.dst == "147.175.204.125":
-            konkretne_ip += 1
-
-        interesting_packet_count += 1
-
-    print('{} contains {} packets ({} interesting) (147.175.204.125 {}-krat)'.
-          format(file_name, count, interesting_packet_count, konkretne_ip))
-
-
-def process_pcap(file_name):
-    print('Opening {}...'.format(file_name))
-
-    count = 0
-    interesting_packet_count = 0
-    interesting = 0
-
-    for (pkt_data, pkt_metadata,) in RawPcapReader(file_name):
-        count += 1
-
-        ether_pkt = Ether(pkt_data)
-        print(ether_pkt.answers())
-        if 'type' not in ether_pkt.fields:
-            # LLC frames will have 'len' instead of 'type'.
-            # We disregard those
-            continue
-
-        if ether_pkt.type != 0x0800:
-            # disregard non-IPv4 packets
-            continue
-
-        ip_pkt = ether_pkt[IP]
-        print(ip_pkt.src)
-
-
-        if ip_pkt.src == '169.215.167.248':
-            print(ip_pkt.src)
-            # Uninteresting source IP address
-            interesting +=1
-            continue
-
-        interesting_packet_count += 1
-
-    print('{} contains {} packets ({} interesting)'.
-          format(file_name, count, interesting))
-
-def NULL_flood():
+def NULL_flood(three):
     src_ip_list = []
     pocet_syn = 0
 
@@ -130,23 +54,23 @@ def NULL_flood():
                     src_ip_list = sorted(src_ip_list, reverse=True, key=lambda d: d['pocet'])
 
 
-    print('**************** Podozrenie na NULL TCP scan portov ****************')
-    print('Počet zachytených TCP_SYN paketov:{}'.format(pocet_syn))
-    print('\n')
-    print('Najaktívnejších 5 zdrojových IP a ich 5 najčastejších cieľov')
+    three.write('**************** Podozrenie na NULL TCP scan portov ****************\n')
+    three.write('Počet zachytených TCP_SYN paketov:{}\n'.format(pocet_syn))
+    three.write('\n')
+    three.write('Najaktívnejších 5 zdrojových IP a ich 5 najčastejších cieľov\n')
     for i in range({True: len(src_ip_list), False: 5}[len(src_ip_list)<5]):
-        print('======================================')
-        print('{}. IP: {:20} {} krát'.format(i+1, src_ip_list[i]['IP'], src_ip_list[i]['pocet']))
-        print('--------------------------------------')
+        three.write('======================================\n')
+        three.write('{}. IP: {:20} {} krát\n'.format(i+1, src_ip_list[i]['IP'], src_ip_list[i]['pocet']))
+        three.write('--------------------------------------\n')
         for j in range({True: len(src_ip_list[i]['destination']), False: 5}[len(src_ip_list[i]['destination'])<5]):
             #print(src_ip_list[i]['destination'][j]['IP'])
-            print('Ciel: {:10} \t {} krát'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
-        print("\n")
+            three.write('Ciel: {:10} \t {} krát\n'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
+        three.write("\n")
 
-def DNS_ANY():
+def DNS_ANY(four):
     src_ip_list = []
     pocet_dns = 0
-    kl = 1
+
     for pkt in pkts:
         flag1 = 1
         flag_dst_zaznam = 1
@@ -190,21 +114,21 @@ def DNS_ANY():
                         src_ip_list = sorted(src_ip_list, reverse=True, key=lambda d: d['pocet'])
 
 
-    print('**************** Podozrenie na NULL TCP scan portov ****************')
-    print('Počet zachytených TCP_SYN paketov:{}'.format(pocet_dns))
-    print('\n')
-    print('Najaktívnejších 5 zdrojových IP a ich 5 najčastejších cieľov')
+    four.write('**************** Podozrenie na DNS_ANY útok ****************\n')
+    four.write('Počet zachytených DNS_ANY paketov:{}\n'.format(pocet_dns))
+    four.write('\n')
+    four.write('Najaktívnejších 5 zdrojových IP a ich 5 najčastejších cieľov\n')
     for i in range({True: len(src_ip_list), False: 5}[len(src_ip_list)<5]):
-        print('======================================')
-        print('{}. IP: {:20} {} krát'.format(i+1, src_ip_list[i]['IP'], src_ip_list[i]['pocet']))
-        print('--------------------------------------')
+        four.write('======================================\n')
+        four.write('{}. IP: {:20} {} krát\n'.format(i+1, src_ip_list[i]['IP'], src_ip_list[i]['pocet']))
+        four.write('--------------------------------------\n')
         for j in range({True: len(src_ip_list[i]['destination']), False: 5}[len(src_ip_list[i]['destination'])<5]):
             #print(src_ip_list[i]['destination'][j]['IP'])
-            print('Ciel: {:10} \t {} krát'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
-        print("\n")
+            four.write('Ciel: {:10} \t {} krát\n'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
+        four.write("\n")
 
 
-def DNS_WEB():
+def DNS_WEB(five):
     query_name = []
     pocet_dns = 0
 
@@ -221,6 +145,8 @@ def DNS_WEB():
                         if (dns_type != 255):
                             pocet_dns += 1
                             dns_name = pkt[DNSQR].qname
+                            dns_name=dns_name.decode("utf-8")
+                            dns_name = dns_name[:-1]
                             ip_src = pkt[IP].src
                             ip_dst = pkt[IP].dst
 
@@ -264,24 +190,24 @@ def DNS_WEB():
                                 zaznam = {'DNS': dns_name, 'S_IP': source_IP, 'D_IP': destination_IP}
                                 query_name.append(zaznam)
 
-    print('**************** Podozrenie na DNS flood ****************')
-    print('Počet zachytených DNS paketov:{}'.format(pocet_dns))
-    print('\n')
+    five.write('**************** Podozrenie na DNS flood ****************\n')
+    five.write('Počet zachytených DNS paketov:{}\n'.format(pocet_dns))
+    five.write('\n')
 
     for zaznam in query_name:
-        print('======================================')
-        print('Name: {}'.format(zaznam['DNS']))
-        print('---------------- 5 najčastejších ----------------')
+        five.write('======================================\n')
+        five.write('Name: {}\n'.format(zaznam['DNS']))
+        five.write('---------------- 5 najčastejších ----------------\n')
         for j in range({True: len(zaznam['S_IP']), False: 5}[len(zaznam['S_IP'])<5]):
-            print('Zdroj: {:10} \t {} krát'.format(zaznam['S_IP'][j]['IP'], zaznam['S_IP'][j]['pocet']))
-        print('---------------- 5 najčastejších ----------------')
+            five.write('Zdroj: {:10} \t {} krát\n'.format(zaznam['S_IP'][j]['IP'], zaznam['S_IP'][j]['pocet']))
+        five.write('---------------- 5 najčastejších ----------------\n')
         for j in range({True: len(zaznam['D_IP']), False: 5}[len(zaznam['D_IP']) < 5]):
-            print('Ciel: {:10} \t {} krát'.format(zaznam['D_IP'][j]['IP'], zaznam['D_IP'][j]['pocet']))
-        print("\n")
+            five.write('Ciel: {:10} \t {} krát\n'.format(zaznam['D_IP'][j]['IP'], zaznam['D_IP'][j]['pocet']))
+        five.write("\n")
 
 
 #icmp.type==8 or icmp.type==0
-def ICMP_flood():
+def ICMP_flood(two):
     src_ip_list = []
     pocet_icmp = 0
 
@@ -324,23 +250,22 @@ def ICMP_flood():
                     src_ip_list = sorted(src_ip_list, reverse=True, key=lambda d: d['pocet'])
 
 
-    print('**************** Podozrenie na ICMP scan portov ****************')
-    print('Počet zachytených ICMP type 0/8 paketov:{}'.format(pocet_icmp))
-    print('\n')
-    print('Najaktívnejších 5 zdrojových IP a ich 5 najčastejších cieľov')
+    two.write('**************** Podozrenie na ICMP scan portov ****************\n')
+    two.write('Počet zachytených ICMP type 0/8 paketov:{}\n'.format(pocet_icmp))
+    two.write('\n')
+    two.write('Najaktívnejších 5 zdrojových IP a ich 5 najčastejších cieľov\n')
 
     for i in range({True: len(src_ip_list), False: 5}[len(src_ip_list)<5]):
-        print('======================================')
-        print('{}. IP: {:20} {} krát'.format(i+1, src_ip_list[i]['IP'], src_ip_list[i]['pocet']))
-        print('--------------------------------------')
+        two.write('======================================\n')
+        two.write('{}. IP: {:20} {} krát\n'.format(i+1, src_ip_list[i]['IP'], src_ip_list[i]['pocet']))
+        two.write('--------------------------------------\n')
 
         for j in range({True: len(src_ip_list[i]['destination']), False: 5}[len(src_ip_list[i]['destination'])<5]):
-            #print(src_ip_list[i]['destination'][j]['IP'])
-            print('Ciel: {:10} \t {} krát'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
-        print("\n")
+            two.write('Ciel: {:10} \t {} krát\n'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
+        two.write("\n")
 
 #tcp.flags.syn==1 and tcp.flags.ack==0 and tcp.window_size <= 1024
-def SYN_flood():
+def SYN_flood(one):
     src_ip_list = []
     pocet_syn = 0
 
@@ -386,44 +311,19 @@ def SYN_flood():
                     src_ip_list = sorted(src_ip_list, reverse=True, key=lambda d: d['pocet'])
 
 
-    print('**************** Podozrenie na TCP_SYN scan portov ****************')
-    print('Počet zachytených TCP_SYN paketov:{}'.format(pocet_syn))
-    print('\n')
-    print('Najaktívnejších 5 zdrojových IP a ich 5 najčastejších cieľov')
-    for i in range(5):
-        print('======================================')
-        print('{}. IP: {:20} {} krát'.format(i+1, src_ip_list[i]['IP'], src_ip_list[i]['pocet']))
-        print('--------------------------------------')
-        for j in range(5):
-            #print(src_ip_list[i]['destination'][j]['IP'])
-            print('Ciel: {:10} \t {} krát'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
-        print("\n")
-
-def print_summary():
-    counter = 0
-    pocet=0
-
-    for pkt in pkts:
-        if IP in pkt:
-            counter += 1
-            ip_src=pkt[IP].src
-            ip_dst=pkt[IP].dst
-
-            print(pkt[IP].dst)
-            print (counter)
-            if (pkt[IP].dst == "147.175.204.138"):
-                pocet+=1
-        if TCP in pkt:
-            tcp_sport=pkt[TCP].sport
-            tcp_dport=pkt[TCP].dport
-
-
-            #print(" IP src " + str(ip_src) + " TCP sport " + str(tcp_sport))
-            #print(" IP dst " + str(ip_dst) + " TCP dport " + str(tcp_dport))
-
-            # you can filter with something like that
-    print("pocet .138 = ", pocet)
-
+    one.write('**************** Podozrenie na TCP_SYN scan portov ****************\n')
+    one.write('Počet zachytených TCP_SYN paketov:{}\n'.format(pocet_syn))
+    one.write('\n')
+    one.write('Najaktívnejších 5 zdrojových IP a ich 5 najčastejších cieľov\n')
+    i=0
+    print(pocet_syn)
+    for i in range({True: len(src_ip_list[i]['IP']), False: 5}[len(src_ip_list[i]['IP']) < 5]):
+        one.write('======================================\n')
+        one.write('{}. IP: {:20} {} krát\n'.format(i+1, src_ip_list[i]['IP'], src_ip_list[i]['pocet']))
+        one.write('--------------------------------------\n')
+        for j in range({True: len(src_ip_list[i]['destination']), False: 5}[len(src_ip_list[i]['destination']) < 5]):
+            one.write('Ciel: {:10} \t {} krát\n'.format(src_ip_list[i]['destination'][j]['IP'], src_ip_list[i]['destination'][j]['pocet']))
+        one.write("\n")
 
 
 if __name__ == '__main__':
@@ -433,17 +333,20 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     file_name = args.pcap
+    one = open("SYN_FLOOD.txt", "w")
+    two = open("ICMP_SWEEP.txt", "w")
+    three = open("NULL_FLOOD.txt", "w")
+    four = open("DNS_ANY.txt", "w")
+    five = open("DNS_WEB.txt", "w")
     if not os.path.isfile(file_name):
-        print('"{}" does not exist'.format(file_name), file=sys.stderr)
+        print('"{}" does not exist\n'.format(file_name), file=sys.stderr)
         sys.exit(-1)
 
+
     pkts = rdpcap(file_name)
-    #print_summary()
-    #SYN_flood()
-    #ICMP_flood()
-    #NULL_flood()
-    #DNS_ANY()
-    DNS_WEB()
-    # or it possible to filter with filter parameter...!
-    #process_pcap(file_name)
+    SYN_flood(one)
+    ICMP_flood(two)
+    NULL_flood(three)
+    DNS_ANY(four)
+    DNS_WEB(five)
     sys.exit(0)
